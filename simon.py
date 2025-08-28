@@ -32,7 +32,7 @@ def get_gesture(hand_landmarks):
 instructions = ["Rock", "Paper", "Scissors",
                 "Simon says Rock", "Simon says Paper", "Simon says Scissors"]
 
-current_instruction = random.choice(instructions)
+expected_gesture = random.choice(instructions)
 last_instruction_time = time.time()
 INSTRUCTION_HOLD = 5   # round duration (seconds)
 
@@ -45,7 +45,7 @@ gesture_text = "Waiting..."
 player_score = 0
 WIN_SCORE = 5
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(1 + cv2.CAP_DSHOW)
 
 while True:
     ret, frame = cap.read()
@@ -58,7 +58,7 @@ while True:
 
     # --- change instruction every X sec ---
     if time.time() - last_instruction_time > INSTRUCTION_HOLD:
-        current_instruction = random.choice(instructions)
+        expected_gesture = random.choice(instructions)
         last_instruction_time = time.time()
         result_label = ""           # clear result before new round
         stable_gesture = None       # reset locked gesture
@@ -68,33 +68,30 @@ while True:
         hand_landmarks = results.multi_hand_landmarks[0]
         mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
 
-        current = get_gesture(hand_landmarks)
+        detected_gesture = get_gesture(hand_landmarks)
 
-        if current == stable_gesture:
+        if detected_gesture == stable_gesture:
             if time.time() - stable_since >= HOLD_TIME:
-                gesture_text = f"Locked: {current}"
+                gesture_text = f"Locked: {detected_gesture}"
 
                 if result_label == "":
-                    if current_instruction.startswith("Simon says"):
-                        move = current_instruction.split("Simon says ")[-1]
-                        if current == move:
+                    if instructions.index(expected_gesture) > 2:
+                        if detected_gesture == expected_gesture.split("Simon says ")[-1]:
                             result_label = "Correct!"
                             player_score += 1
                         else:
-                            result_label = "Wrong!"
+                            result_label = "Uh Oh! Wrong Move"
                             player_score-=1
                     else:
-                        if current == current_instruction:
-                            result_label = "Wrong!"
+                        if detected_gesture:
+                            result_label = "Uh Oh! Simon didn't say!"
                             player_score-=1
-                        else:
-                            result_label = "Correct!"
-                            player_score += 1
+            
         else:
-            stable_gesture, stable_since = current, time.time()
+            stable_gesture, stable_since = detected_gesture, time.time()
 
     # --- UI Text ---
-    cv2.putText(frame, f"Instruction: {current_instruction}", (10, 40),
+    cv2.putText(frame, f"Instruction: {expected_gesture}", (10, 40),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 2)
 
     cv2.putText(frame, gesture_text, (10, 80),
@@ -113,8 +110,11 @@ while True:
     if player_score >= WIN_SCORE:
         cv2.putText(frame, "YOU WIN!", (200, 250),
                     cv2.FONT_HERSHEY_SIMPLEX, 2.0, (0, 255, 0), 5)
+    elif player_score < 0:
+        cv2.putText(frame, "YOU LOOSE", (200, 250),
+                    cv2.FONT_HERSHEY_SIMPLEX, 2.0, (0, 255, 0), 5)
         cv2.imshow("Simon Says RPS", frame)
-        cv2.waitKey(3000)   # hold the screen for 3 sec
+        cv2.waitKey(5000)   # hold the screen for 5 sec
         break
 
     # --- Show Frame ---
